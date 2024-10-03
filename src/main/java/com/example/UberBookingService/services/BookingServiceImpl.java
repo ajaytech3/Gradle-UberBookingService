@@ -1,17 +1,14 @@
 package com.example.UberBookingService.services;
 
 import com.example.UberBookingService.apis.LocationServiceApi;
-import com.example.UberBookingService.dtos.CreateBookingDto;
-import com.example.UberBookingService.dtos.CreateBookingResponseDto;
-import com.example.UberBookingService.dtos.DriverLocationDto;
-import com.example.UberBookingService.dtos.NearbyDriversRequestDto;
+import com.example.UberBookingService.dtos.*;
 import com.example.UberBookingService.repositories.BookingRepository;
+import com.example.UberBookingService.repositories.DriverRepository;
 import com.example.UberBookingService.repositories.PassengerRepository;
 import com.example.UberProject_EntityService.models.Booking;
 import com.example.UberProject_EntityService.models.BookingStatus;
+import com.example.UberProject_EntityService.models.Driver;
 import com.example.UberProject_EntityService.models.Passenger;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import retrofit2.Call;
@@ -28,6 +25,8 @@ public class BookingServiceImpl implements BookingService{
 
     private final PassengerRepository passengerRepository;
 
+    private final DriverRepository driverRepository;
+
     private final BookingRepository bookingRepository;
 
     private final RestTemplate restTemplate;
@@ -36,11 +35,12 @@ public class BookingServiceImpl implements BookingService{
 
 //    private static final String LOCATION_SERVICE="http://localhost:6666";
 
-    public BookingServiceImpl(PassengerRepository passengerRepository,BookingRepository bookingRepository,LocationServiceApi locationServiceApi){
+    public BookingServiceImpl(PassengerRepository passengerRepository,BookingRepository bookingRepository,LocationServiceApi locationServiceApi,DriverRepository driverRepository){
         this.bookingRepository=bookingRepository;
         this.passengerRepository=passengerRepository;
         this.restTemplate= new RestTemplate();
         this.locationServiceApi=locationServiceApi;
+        this.driverRepository=driverRepository;
     }
 
     public CreateBookingResponseDto createBooking(CreateBookingDto bookingDetails){
@@ -82,17 +82,32 @@ public class BookingServiceImpl implements BookingService{
                 .build();
     }
 
+    @Override
+    public UpdateBookingResponseDto updateBooking(UpdateBookingRequestDto bookingRequestDto, Long bookingId) {
+       Optional<Driver> driver =driverRepository.findById(bookingRequestDto.getDriverId().get());
+//       if(driver.isPresent()){
+           bookingRepository.updateBookingById(bookingId,BookingStatus.SCHEDULED,driver.get());
+//       }
+            Optional<Booking> booking=bookingRepository.findById(bookingId);
+            return UpdateBookingResponseDto.builder()
+                    .bookingId(bookingId)
+                    .status(booking.get().getBookingStatus())
+                    .driver(Optional.ofNullable(booking.get().getDriver()))
+                    .build();
+
+    }
+
     private void processNearbyDriversAsync(NearbyDriversRequestDto requestDto){
         Call<DriverLocationDto[]> call= locationServiceApi.getNearbyDrivers(requestDto);
 
         call.enqueue(new Callback<DriverLocationDto[]>() {
             @Override
             public void onResponse(Call<DriverLocationDto[]> call, Response<DriverLocationDto[]> response) {
-                         try {
-                    Thread.sleep(5000);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
+//                         try {
+//                    Thread.sleep(5000);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
                 if(response.isSuccessful() && response.body() != null) {
                     List<DriverLocationDto> driverLocations = Arrays.asList(response.body());
                     driverLocations.forEach(driverLocationDto -> {
